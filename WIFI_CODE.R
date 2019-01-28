@@ -33,7 +33,11 @@ library(e1071)
 library(kknn)
 library(tidyverse)
 
+#############################################################################
 
+# DATA CLEANING
+
+#############################################################################
 ####### cargo las dos tablas training y validation
 
 
@@ -68,7 +72,7 @@ plot(nc.coord)
 
 buildingdistrib <- wifitraining %>%
   group_by(BUILDINGID) %>%
-  count(FLOOR)
+
 
 ggplot(data = buildingdistrib) +
   aes(x = BUILDINGID, y = FLOOR, fill = n, size = n) +
@@ -96,13 +100,36 @@ valwifi <- valwifi %>%
 
 ##################  IDENTIFICAR DUPLICADOS ##############################
 
-wifitraining$duplicados <-  duplicated(wifitraining, by = wifitraining$ifp)
+# Duplicados en trainning
+
+wifitraining$duplicados <-  duplicated(wifitraining, by = WAPS)
 
 wifitraining_dupli <- wifitraining
 
 wifitraining_dupli <- filter(wifitraining_dupli, wifitraining_dupli$duplicados == TRUE)
 
-head(wifitraining_dupli[500:532])
+head(wifitraining_dupli[470:478],35)
+unique(wifitraining_dupli$USERID)
+unique(wifitraining_dupli$PHONEID)
+unique(wifitraining_dupli$builandfloor)
+
+# Duplicados en validation
+
+valwifi105$duplicados <-  duplicated(valwifi, by = WAPS)
+
+valwifi105_dupli <- valwifi105
+
+valwifi105_dupli <- filter(valwifi105_dupli, valwifi105_dupli$duplicados == TRUE)
+
+head(valwifi105_dupli[470:478],35)
+unique(valwifi105_dupli$USERID)
+unique(valwifi105_dupli$PHONEID)
+unique(wifitraining_dupli$builandfloor)
+
+
+
+
+
 
 wifitraining_sin_dupli <- unique(wifitraining)
 
@@ -355,8 +382,8 @@ esquisser(obsxedifyplanta)
 
 ggplot(data = obsxedifyplanta) +
   aes(x = BUILDINGID, y = FLOOR, size = n) +
-  geom_point(color = '#0c4c8a') +
-  labs(title = 'Numero de senales emitidas por edificio y por planta') +
+  geom_point(color = '#1f9e89') +
+  labs(title = 'Nº de señales emitidas en cada piso y planta') +
   theme_minimal()
 
 # Numero de observaciones por user
@@ -389,6 +416,7 @@ esquisser(obsxedif)
 esquisser(data=wifitraining105)
 
 WAPS <- grep("WAP",names(wifitraining105),value=TRUE)
+
 ggplot(data = wifitraining105) +
   aes(x = BUILDINGID, y = FLOOR, size = WAPS) +
   geom_point(color = '#0c4c8a') +
@@ -476,8 +504,165 @@ head(wifitraining[465:478])
 
 
 
+############## identificar el peso de los moviles en las muestras de trainning y val ###############
+
+peso_x_moviltrain <- wifitraining105 %>%
+  group_by(PHONEID) %>%
+  tally() #counts
+
+esquisser(peso_x_movil)
+
+ggplot(data = peso_x_movil) +
+  aes(x = PHONEID, y = n) +
+  geom_point(color = '#0c4c8a') +
+  labs(title = 'Number of fingerprints per PHONEID IN TRAINNING') +
+  theme_minimal()
+
+peso_x_moviltest <- wifitraining105 %>%
+  group_by(PHONEID) %>%
+  tally() #counts
+
+esquisser(peso_x_moviltest)
+
+ggplot(data = peso_x_moviltest) +
+  aes(x = PHONEID, y = n) +
+  geom_point(color = '#0c4c8a') +
+  labs(title = 'Number of fingerprints per PHONEID IN TEST') +
+  theme_minimal()
+
+# EL MOVIL 13 Y 14 TIENEN UN PESO MUCHO MAYOR EN LAS DATASET HAY QUE VER SI TIENEN BUENAS SEÑALES
+
+#train
+phone13train <- filter(comuneswapstrain, comuneswapstrain$PHONEID == 13)
+phone14train <- filter(comuneswapstrain, comuneswapstrain$PHONEID == 14)
+
+unique(phone13y14train$BUILDINGID)
+unique(phone13y14train$builandfloor)
+
+
+phone13y14train <- bind_rows(phone13train, phone14train)
+
+summary(phone13y14train[465:479])
+
+#test
+phone13test <- filter(comuneswapsval, comuneswapsval$PHONEID == 13)
+phone14test <- filter(comuneswapsval, comuneswapsval$PHONEID == 14)
+
+phone13y14test <- bind_rows(phone13test, phone14test)
+
+summary(phone13y14test[375:382])
+
+######  Eliminar las waps que alguna de sus señales tienen valores superiores a -30 #############
+
+summary(comuneswapstrain[1:25])
+
+summary(comuneswapstrain[312:321])
+
+# creo una tabla de solo los waps para que pueda sacar el la intensidad de señal maxima de los waps 
+
+solowaps <- comuneswapstrain[1:313]
+
+# añado una columna en la dataset de comunes que me indique la señal maxima
+
+comuneswapstrain$maxsignal <- apply(solowaps, 1, max)
+
+summary(comuneswapstrain[312:322])
+
+# creo una dataset nueva con solo los fingerprints con señales maximas inferiores a -30
+
+comuneswapstrainsignal <- filter(comuneswapstrain, comuneswapstrain$maxsignal < -30)
+
+summary(comuneswapstrainsignal[312:322])
+
+# hago lo mismo en validation
+
+summary(comuneswapsval[312:321])
+
+WAPS <- grep("WAP",names(comuneswapsval),value=TRUE)
+
+solowapstest <- comuneswapsval[WAPS]
+
+comuneswapsval$maxsignal <- apply(solowapstest, 1, max)
+
+summary(comuneswapsval[312:322])
+
+comuneswapstestsignal <- filter(comuneswapsval, comuneswapsval$maxsignal < -30)
+
+summary(comuneswapstrainsignal[312:322])
+
+comuneswapsval <- comuneswapstestsignal
+comuneswapstrain <- comuneswapstrainsignal
+
+################## fingerprints que solo tienen 2 señales waps ##########################
+
+summary(comuneswapstrain[312:323])
+View(comuneswapstrain[312:323])
+
+comuneswapstrain$num_señales <- apply(comuneswapstrain[1:313], 1, function(x) sum(x != -105))
+
+comprobacion <- filter(comuneswapstrain, num_señales == 2| num_señales == 3 & maxsignal < -90)
+
+class(comprobacion$num_señales)
+
+comprobacion$num_señales <- as.factor(comprobacion$num_señales)
+
+View(comprobacion[312:323])
+esquisser(comprobacion)
+
+ggplot(data = comprobacion) +
+  aes(x = LATITUDE, y = LONGITUDE, color = builandfloor) +
+  geom_point() +
+  scale_color_distiller(palette = "Paired") +
+  labs(title = 'Fingerprints with low RSSI and 3 or less signals') +
+  theme_minimal()
+
+##########  fingerprints que solo tienen 2 o 3 señales ##############
+
+summary(comuneswapsval[312:322])
+View(comuneswapstrain[312:323])
+
+comuneswapstrain$num_señales <- apply(comuneswapstrain[1:313], 1, function(x) sum(x != -105))
+
+comprobacion <- filter(comuneswapstrain, num_señales == 2| num_señales == 3 & maxsignal < -90)
+
+class(comprobacion$num_señales)
+
+comprobacion$num_señales <- as.factor(comprobacion$num_señales)
+
+View(comprobacion[312:322])
+esquisser(comprobacion)
+
+
+
+#####################   intentar localizar los waps   #########################
+
+waploc <- filter(comuneswapsval)
+
+summary(waploc[312:322])
+waploc <- waploc[313:322]
+summary(waploc[1:10])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ##############################################
+
+#APLICACION DE MODELOS
+
 #############################################
+
 
 #APPLY RANDOM FOREST TO PREDICT BUILDING
 
@@ -500,9 +685,9 @@ testpredbuiltding$BUILDINGID <- as.factor(testpredbuiltding$BUILDINGID)
 
 #predbuilding <- train(BUILDINGID~., data = trainpredbuiltding, method = "parRF", metric = "RMSE", ntree = 10)
 set.seed(123)
-system.time(rfpredbuilding <- randomForest(BUILDINGID ~ ., trainpredbuiltding, ntree=100))
+system.time(rfpredbuilding <- randomForest(BUILDINGID ~ ., trainpredbuiltding, ntree=300))
 
-system.time(testpredbuilding <- predict(rfpredbuilding, newdata = testpredbuiltding))
+testpredbuilding <- predict(rfpredbuilding, newdata = testpredbuiltding)
 
 rfpredbuilding <- testpredbuilding
 rfpredbuilding
@@ -523,9 +708,9 @@ str(predandactualbuilding)
 esquisser(predandactualbuilding)
 
 ggplot(data = predandactualbuilding) +
-  aes(y = errors, x = seq_along(errors)) +
-  geom_line(color = '#0c4c8a') +
-  labs(title = 'Errores de predicción de edificio') +
+  aes(x = errors) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error in building') +
   theme_minimal()
 
 confusionMatrix(rfpredbuilding, valwifi105$BUILDINGID)
@@ -576,7 +761,7 @@ esquisser(predandactualfloor)
 ggplot(data = predandactualfloor) +
   aes(x = errors) +
   geom_histogram(bins = 18, fill = '#0c4c8a') +
-  labs(title = 'Errores de FLOOR') +
+  labs(title = 'Errors in FLOOR') +
   theme_minimal()
 
 confusionMatrix(rfpredfloor, valwifi105$FLOOR)
@@ -588,8 +773,8 @@ confusionMatrix(rfpredfloor, valwifi105$FLOOR)
 
 # training dataset
 
-summary(comuneswapstrain[312:321])
-trainpredbf <- comuneswapstrain[-c(313:320)]
+summary(comuneswapstrain[312:323])
+trainpredbf <- comuneswapstrain[-c(313:320,322,323)]
 summary(trainpredbf[300:313])
 str(trainpredbf[300:313])
 trainpredbf$builandfloor <- as.factor(trainpredbf$builandfloor)
@@ -599,15 +784,17 @@ unique(trainpredbf$builandfloor)
 
 #testing datset
 
-summary(comuneswapsval[312:321])
-testpredbf <- comuneswapsval[-c(313:320)]
+summary(comuneswapsval[312:322])
+testpredbf <- comuneswapsval[-c(313:320,322)]
 summary(testpredbf[300:313])
 testpredbf$builandfloor <- as.factor(testpredbf$builandfloor)
 
 unique(testpredbf$builandfloor)
 
 set.seed(123)
-system.time(predbf <- randomForest(builandfloor ~ ., trainpredbf, ntree=200))
+system.time(predbf <- randomForest(builandfloor ~ ., trainpredbf, ntree=300))
+
+summary(testpredbf[300:314])
 
 testpredbf <- predict(predbf, newdata = testpredbf)
 
@@ -620,41 +807,15 @@ unique(actualbuilandfloor)
 #str(predandactualbf$rfpredbf)
 #str(predandactualbf$actual)
 
-#plotpredandactualfloor <- plot(predandactualfloor$actual, predandactualfloor$rfpredfloor)
-
 predandactualbf <- data.frame(rfpredbf, actualbuilandfloor)
 str(predandactualbf)
-
-#predandactualbf$rfpredbf <- as.integer(predandactualbf$rfpredbf)
-#predandactualbf$actualbuilandfloor <- as.integer(predandactualbf$actualbuilandfloor)
-str(predandactualbf)
-
-#predandactualbf$errors<-predandactualbf$rfpredbf-predandactualbf$actualbuilandfloor
 
 esquisser(predandactualbf)
 
 confusionMatrix(rfpredbf, valwifi105$builandfloor)
 
-#todas las lat y long
-
-#nc.coord <- cbind(wifitraining$LONGITUDE,wifitraining$LATITUDE, wifitraining$BUILDINGID)
-
-#plot(nc.coord)
-
-# localizar error
-
-
-#error_edif_1_planta_1_y_2 <- filter(valwifi105, valwifi105$builandfloor == 11)
-
-#colnames(error_edif_1_planta_1_y_2)
-#colnames(predandactualbf)
-
-#error_edif_1_planta_1_y_2 - cbind(error_edif_1_planta_1_y_2, predandactualbf$rfpredbf)
-
-
-#loc_error <- cbind(error_edif_1_planta_1_y_2$LONGITUDE, error_edif_1_planta_1_y_2$LATITUDE)
-
 # creo una tabla que contiene los wapscomunes de validation y añado la columna de predicción 
+
 predbferror <- cbind(comuneswapsval, predandactualbf$rfpredbf)
 colnames(predbferror)
 
@@ -663,18 +824,18 @@ colnames(predbferror)
 error_edif_1_planta_1_2_y_3 <- filter(predbferror, predbferror$builandfloor == 11)
 
 
-summary(error_edif_1_planta_1_2_y_3[300:322])
+summary(error_edif_1_planta_1_2_y_3[300:323])
 str(error_edif_1_planta_1_2_y_3[300:322])
 class(error_edif_1_planta_1_2_y_3$builandfloor)
 class(error_edif_1_planta_1_2_y_3$"predandactualbf$rfpredbf")
 View(error_edif_1_planta_1_2_y_3[310:323])
 unique(error_edif_1_planta_1_2_y_3$"predandactualbf$rfpredbf")
 
-names(error_edif_1_planta_1_2_y_3)[322] <- "predictions"
+names(error_edif_1_planta_1_2_y_3)[323] <- "predictions"
 
-error_edif_1_planta_1_2_y_3$error <- ifelse(error_edif_1_planta_1_2_y_3$predictions == 11, "0", 
-                                            ifelse(error_edif_1_planta_1_2_y_3$predictions == 13, "2",
-                                                   ifelse(error_edif_1_planta_1_2_y_3$predictions == 12, "1","-1")))
+error_edif_1_planta_1_2_y_3$error <- ifelse(error_edif_1_planta_1_2_y_3$predictions == 11, "Good prediction", 
+                                            ifelse(error_edif_1_planta_1_2_y_3$predictions == 13, "Mistaken of 2 floors",
+                                                   ifelse(error_edif_1_planta_1_2_y_3$predictions == 12, "Mistaken for the floor above","Mistaken for the floor below")))
 
 
 esquisser(error_edif_1_planta_1)
@@ -682,14 +843,13 @@ esquisser(error_edif_1_planta_1)
 ggplot(data = error_edif_1_planta_1_2_y_3) +
   aes(x = LONGITUDE, y = LATITUDE, color = error) +
   geom_point() +
-  scale_color_brewer(palette = "Set1") +
+  scale_colour_manual(values = c("Good prediction" = "darkgreen", "Mistaken of 2 floors" = "red", "Mistaken for the floor above" = "orange", "Mistaken for the floor below" = "lightblue")) +
   labs(title = "Visualización de errores en la predicción de pisos del building 1 en el piso 1") +
-  theme_minimal() +
-  facet_wrap("FLOOR")
+  theme_minimal()
 
-#View(error_edif_1_planta_1_2_y_3[310:323])
 
-error11 <- filter(error_edif_1_planta_1_2_y_3, error_edif_1_planta_1_2_y_3$error != 0)
+
+#error11 <- filter(error_edif_1_planta_1_2_y_3, error_edif_1_planta_1_2_y_3$error != 0)
 
 #unique(error11$PHONEID)
 #[1]  0  5 13 20 12  2  9 15  4 (no parece haber un error especifico....)
@@ -701,31 +861,57 @@ error_buildandfloor_10 <- filter(predbferror, predbferror$builandfloor == 10)
 
 # cambio de nombre la columna de predicciones
 
-names(error_buildandfloor_10)[322] <- "predictions"
+names(error_buildandfloor_10)[323] <- "predictions"
 
 # añado un columna que me calcule la diferencia entre predicho y real para ello primero tengo que saber las variantes posibles
 
-View(error_buildandfloor_10[310:322])
+summary(error_buildandfloor_10[310:323])
 
 unique(error_buildandfloor_10$predictions)
 
-error_buildandfloor_10$error <- ifelse(error_buildandfloor_10$predictions == 10, "0", 
-                                            ifelse(error_buildandfloor_10$predictions == 13, "3",
-                                                   ifelse(error_buildandfloor_10$predictions == 12, "2","1")))
+error_buildandfloor_10$error <- ifelse(error_buildandfloor_10$predictions == 10, "Good prediction", 
+                                            ifelse(error_buildandfloor_10$predictions == 13, "Mistaken of 3 floors above",
+                                                   ifelse(error_buildandfloor_10$predictions == 12, "Mistaken of 2 floors above","Mistaken for the floor above")))
 
 View(error_buildandfloor_10[310:323])
 
 ggplot(data = error_buildandfloor_10) +
   aes(x = LONGITUDE, y = LATITUDE, color = error) +
   geom_point() +
-  scale_color_brewer(palette = "Set1") +
+  scale_colour_manual(values = c("Good prediction" = "darkgreen", "Mistaken of 3 floors above" = "red", "Mistaken of 2 floors above" = "orange", "Mistaken for the floor above" = "lightblue")) +
   labs(title = "Visualización de errores en la predicción de pisos del building 1 en el piso 0") +
+  theme_minimal()
+
+
+error_buildandfloor_24 <- filter(predbferror, predbferror$builandfloor == 24)
+
+# cambio de nombre la columna de predicciones
+
+names(error_buildandfloor_24)[323] <- "predictions"
+
+# añado un columna que me calcule la diferencia entre predicho y real para ello primero tengo que saber las variantes posibles
+
+summary(error_buildandfloor_24[310:323])
+
+unique(error_buildandfloor_24$predictions)
+
+error_buildandfloor_24$error <- ifelse(error_buildandfloor_24$predictions == 24, "Good prediction", 
+                                       ifelse(error_buildandfloor_24$predictions == 21, "Mistaken of 3 floors below","Mistaken for the floor below"))
+                                            
+
+View(error_buildandfloor_24[310:323])
+
+ggplot(data = error_buildandfloor_24) +
+  aes(x = LONGITUDE, y = LATITUDE, color = error) +
+  geom_point() +
+  scale_colour_manual(values = c("Good prediction" = "darkgreen", "Mistaken of 3 floors below" = "red", "Mistaken for the floor below" = "lightblue")) +
+  labs(title = "Visualización de errores en la predicción de pisos del building 2 en el piso 4") +
   theme_minimal()
 
 # intento descubrir si hay alguna relación entre los errores y los phoneid
 
 error_buildandfloor_10 %>%
-  filter(error != "0") %>%
+  filter(error != "Good prediction") %>%
   group_by(error) %>%
   summarise(PHONEID, predictions, error) 
 
@@ -737,7 +923,7 @@ error_buildandfloor_0 <- filter(predbferror, predbferror$builandfloor == 0)
 
 # cambio de nombre la columna de predicciones
 
-names(error_buildandfloor_0)[322] <- "predictions"
+names(error_buildandfloor_0)[323] <- "predictions"
 
 # añado un columna que me calcule la diferencia entre predicho y real para ello primero tengo que saber las variantes posibles
 
@@ -745,8 +931,8 @@ View(error_buildandfloor_0[310:322])
 
 unique(error_buildandfloor_0$predictions)
 
-error_buildandfloor_0$error <- ifelse(error_buildandfloor_0$predictions == 0, "0", 
-                                       ifelse(error_buildandfloor_0$predictions == 1, "1","2"))
+error_buildandfloor_0$error <- ifelse(error_buildandfloor_0$predictions == 0, "Good prediction", 
+                                       ifelse(error_buildandfloor_0$predictions == 1, "Mistaken for the floor above","Mistaken of 2 floors above"))
                                               
 
 View(error_buildandfloor_0[310:323])
@@ -754,14 +940,14 @@ View(error_buildandfloor_0[310:323])
 ggplot(data = error_buildandfloor_0) +
   aes(x = LONGITUDE, y = LATITUDE, color = error) +
   geom_point() +
-  scale_color_brewer(palette = "Set1") +
+  scale_colour_manual(values = c("Good prediction" = "darkgreen", "Mistaken for the floor above" = "orange", "Mistaken of 2 floors above" = "red")) +
   labs(title = "Visualización de errores en la predicción de pisos del building 0 en el piso 0") +
   theme_minimal()
 
 # intento descubrir si hay alguna relación entre los errores y los phoneid
 
 error_buildandfloor_0 %>%
-  filter(error != "0") %>%
+  filter(error != "Good prediction") %>%
   group_by(predictions) %>%
   summarise(PHONEID, predictions, error) 
 
@@ -774,7 +960,7 @@ error_buildandfloor_1 <- filter(predbferror, predbferror$builandfloor == 1)
 
 # cambio de nombre la columna de predicciones
 
-names(error_buildandfloor_1)[322] <- "predictions"
+names(error_buildandfloor_1)[323] <- "predictions"
 
 # añado un columna que me calcule la diferencia entre predicho y real para ello primero tengo que saber las variantes posibles
 
@@ -782,8 +968,9 @@ View(error_buildandfloor_1[310:322])
 
 unique(error_buildandfloor_1$predictions)
 
-error_buildandfloor_1$error <- ifelse(error_buildandfloor_1$predictions == 1, "0", 
-                                      ifelse(error_buildandfloor_1$predictions == 0, "-1","12"))
+error_buildandfloor_1$error <- ifelse(error_buildandfloor_1$predictions == 1, "Good prediction", 
+                                      ifelse(error_buildandfloor_1$predictions == 2, "Mistaken for the floor above",
+                                      ifelse(error_buildandfloor_1$predictions == 0, "Mistaken for the floor below","Mistaken of floor and building")))
 
 
 View(error_buildandfloor_1[310:323])
@@ -791,14 +978,14 @@ View(error_buildandfloor_1[310:323])
 ggplot(data = error_buildandfloor_1) +
   aes(x = LONGITUDE, y = LATITUDE, color = error) +
   geom_point() +
-  scale_color_brewer(palette = "Set1") +
+  scale_colour_manual(values = c("Good prediction" = "darkgreen", "Mistaken for the floor above" = "lightblue", "Mistaken for the floor below" = "orange", "Mistaken of floor and building" = "red")) +
   labs(title = "Visualización de errores en la predicción de pisos del building 0 en el piso 1") +
   theme_minimal()
 
 # intento descubrir si hay alguna relación entre los errores y los phoneid
 
 error_buildandfloor_1 %>%
-  filter(error != "0") %>%
+  filter(error != "Good prediction") %>%
   group_by(predictions) %>%
   summarise(PHONEID, predictions, error) 
 
@@ -806,6 +993,47 @@ error_buildandfloor_1 %>%
 
 filter(error_buildandfloor_1, error_buildandfloor_1$ifp == 51651)
 
+
+# creo una nueva tabla para visualizar los errores del edificio 0 en la planta 2
+
+error_buildandfloor_2 <- filter(predbferror, predbferror$builandfloor == 2)
+
+# cambio de nombre la columna de predicciones
+
+names(error_buildandfloor_2)[323] <- "predictions"
+
+# añado un columna que me calcule la diferencia entre predicho y real para ello primero tengo que saber las variantes posibles
+
+View(error_buildandfloor_2[310:323])
+
+unique(error_buildandfloor_2$predictions)
+
+error_buildandfloor_2$error <- ifelse(error_buildandfloor_2$predictions == 2, "Good prediction", 
+                                      ifelse(error_buildandfloor_2$predictions == 0, "Mistaken of 2 floors below","Mistaken for the floor below"))
+
+
+View(error_buildandfloor_2[310:323])
+
+ggplot(data = error_buildandfloor_2) +
+  aes(x = LONGITUDE, y = LATITUDE, color = error) +
+  geom_point() +
+  scale_colour_manual(values = c("Good prediction" = "darkgreen", "Mistaken for the floor below" = "orange", "Mistaken of 2 floors below" = "red")) +
+  labs(title = "Visualización de errores en la predicción de pisos del building 0 en el piso 2") +
+  theme_minimal()
+
+# intento descubrir si hay alguna relación entre los errores y los phoneid
+
+error_buildandfloor_2 %>%
+  filter(error != "Good prediction") %>%
+  group_by(predictions) %>%
+  summarise(PHONEID, predictions, error) 
+
+# De los 3 erroes 2 han sido del phoneid 20 y 1 del phoneid 0
+
+FP49924 <-filter(error_buildandfloor_2, error_buildandfloor_2$ifp == 49924)
+FP49924
+
+# Este fingerprint esta bien tiene 10 señales y de buena intensidad, esta posicionado justo en medio del edificio y se ha equivocado en 2 plantas
 
 #######################################################
 #######################################################
@@ -820,8 +1048,8 @@ head(comuneswapstrain)
 #trainpredbuilding1 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 1))
 trainpredfloorbuild2 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 2))
 
-summary(trainpredfloorbuild2[312:321])
-trainpredfloorbuild2 <- trainpredfloorbuild2[-c(313,314,316,317,318:321)]
+summary(trainpredfloorbuild2[312:315])
+trainpredfloorbuild2 <- trainpredfloorbuild2[-c(314,315,316)]
 summary(trainpredfloorbuild2[300:313])
 str(trainpredfloorbuild2[300:313])
 trainpredfloorbuild2$FLOOR <- as.factor(trainpredfloorbuild2$FLOOR)
@@ -834,8 +1062,8 @@ head(comuneswapsval)
 #testpredbuilding1 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 1))
 testpredfloorbuild2 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 2))
 
-summary(testpredfloorbuild2[312:321])
-testpredfloorbuild2 <- testpredfloorbuild2[-c(313,314,316,317,318:321)]
+summary(testpredfloorbuild2[312:315])
+testpredfloorbuild2 <- testpredfloorbuild2[-c(314,315,316)]
 summary(testpredfloorbuild2[300:313])
 #testpredfloorbuild2$FLOOR <- as.factor(testpredfloorbuild2$FLOOR)
 class(testpredfloorbuild2)
@@ -843,7 +1071,7 @@ class(testpredfloorbuild2)
 # establezco el set.seed
 set.seed(123)
 # pongo la funcion de cronometro y entreno el modelo randomForest para predecir FLOOR en base a una dataset que solo tiene building 2
-system.time(predfloorbuild2 <- randomForest(FLOOR ~ ., trainpredfloorbuild2, ntree=10))
+system.time(predfloorbuild2 <- randomForest(FLOOR ~ ., trainpredfloorbuild2, ntree=100))
 # pruebo el modelo con la dataframe test
 testpredicfloorbuild2 <- predict(predfloorbuild2, newdata = testpredfloorbuild2)
 
@@ -901,36 +1129,37 @@ confusionMatrix(rfpredfloorbuild2, actualfloorbuild2)
 
 # training dataset building 1
 
-summary(comuneswapstrain[312:321])
+summary(comuneswapstrain[312:323])
 head(comuneswapstrain)
 #trainpredfloorbuilding0 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 0))
 trainpredfloorbuild1 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 1))
 #trainpredfloorbuild2 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 2))
 
-summary(trainpredfloorbuild1[312:321])
-trainpredfloorbuild1 <- trainpredfloorbuild1[-c(313,314,316,317,318:321)]
+summary(trainpredfloorbuild1[310:323])
+trainpredfloorbuild1 <- trainpredfloorbuild1[-c(313,314,316,317,318:323)]
 summary(trainpredfloorbuild1[300:313])
 str(trainpredfloorbuild1[300:313])
 trainpredfloorbuild1$FLOOR <- as.factor(trainpredfloorbuild1$FLOOR)
 
 #testing datset building 1
 
-summary(comuneswapsval[312:321])
+summary(comuneswapsval[312:322])
 head(comuneswapsval)
 #testpredfloorbuild0 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 0))
 testpredfloorbuild1 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 1))
 #testpredfloorbuild2 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 2))
 
-summary(testpredfloorbuild1[312:321])
-testpredfloorbuild1 <- testpredfloorbuild1[-c(313,314,316,317,318:321)]
+summary(testpredfloorbuild1[310:322])
+testpredfloorbuild1 <- testpredfloorbuild1[-c(313,314,316,317,318:322)]
 summary(testpredfloorbuild1[300:313])
+testpredfloorbuild1$FLOOR <- as.factor(testpredfloorbuild1$FLOOR)
 #testpredfloorbuild2$FLOOR <- as.factor(testpredfloorbuild2$FLOOR)
 #class(testpredfloorbuild1)
 
 # establezco el set.seed
 set.seed(123)
 # pongo la funcion de cronometro y entreno el modelo randomForest para predecir FLOOR en base a una dataset que solo tiene building 2
-system.time(predfloorbuild1 <- randomForest(FLOOR ~ ., trainpredfloorbuild1, ntree=300))
+system.time(predfloorbuild1 <- randomForest(FLOOR ~ ., trainpredfloorbuild1, ntree=100))
 # pruebo el modelo con la dataframe test
 testpredicfloorbuild1 <- predict(predfloorbuild1, newdata = testpredfloorbuild1)
 
@@ -941,7 +1170,7 @@ rfpredfloorbuild1
 #testpredfloorbuild2 <- as.data.frame(testpredfloorbuild2, row.names = TRUE)
 
 
-testpredfloorbuild1$FLOOR <- as.factor(testpredfloorbuild1$FLOOR)
+
 
 #testpredfloorbuild2$FLOOR <- testpredfloorbuild2
 actualfloorbuild1 <- testpredfloorbuild1$FLOOR
@@ -964,8 +1193,8 @@ trainpredfloorbuild0 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$
 #trainpredfloorbuild1 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 1))
 #trainpredfloorbuild2 <- as.data.frame(filter(comuneswapstrain, comuneswapstrain$BUILDINGID == 2))
 
-summary(trainpredfloorbuild0[312:321])
-trainpredfloorbuild0 <- trainpredfloorbuild0[-c(313,314,316,317,318:321)]
+summary(trainpredfloorbuild0[312:323])
+trainpredfloorbuild0 <- trainpredfloorbuild0[-c(313,314,316,317,318:323)]
 summary(trainpredfloorbuild0[300:313])
 str(trainpredfloorbuild0[300:313])
 trainpredfloorbuild0$FLOOR <- as.factor(trainpredfloorbuild0$FLOOR)
@@ -978,8 +1207,8 @@ testpredfloorbuild0 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILD
 #testpredfloorbuild0 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 1))
 #testpredfloorbuild2 <- as.data.frame(filter(comuneswapsval, comuneswapsval$BUILDINGID == 2))
 
-summary(testpredfloorbuild0[312:321])
-testpredfloorbuild0 <- testpredfloorbuild0[-c(313,314,316,317,318:321)]
+summary(testpredfloorbuild0[312:322])
+testpredfloorbuild0 <- testpredfloorbuild0[-c(313,314,316,317,318:322)]
 summary(testpredfloorbuild0[300:313])
 #testpredfloorbuild2$FLOOR <- as.factor(testpredfloorbuild2$FLOOR)
 #class(testpredfloorbuild1)
@@ -987,7 +1216,7 @@ summary(testpredfloorbuild0[300:313])
 # establezco el set.seed
 set.seed(123)
 # pongo la funcion de cronometro y entreno el modelo randomForest para predecir FLOOR en base a una dataset que solo tiene building 2
-system.time(predfloorbuild0 <- randomForest(FLOOR ~ ., trainpredfloorbuild0, ntree=300))
+system.time(predfloorbuild0 <- randomForest(FLOOR ~ ., trainpredfloorbuild0, ntree=100))
 # pruebo el modelo con la dataframe test
 testpredicfloorbuild0 <- predict(predfloorbuild0, newdata = testpredfloorbuild0)
 
@@ -1173,6 +1402,163 @@ knnactuallated <- valwifi105$LATITUDE
 
 postResample(knnpredlated, valwifi105$LATITUDE)
 
+# visualización de los errores con todos los edificios
+
+valwifi105$latpredictions <- knntestpredlated
+
+summary(valwifi105[370:377])
+
+valwifi105$laterror <- valwifi105$LATITUDE - valwifi105$latpredictions
+
+summary(valwifi105[368:378])
+
+head(valwifi105[368:378])
+
+#listado de los errores de latidud ordenado de menor a mayor
+
+valwifi105ordenado <- valwifi105[order(valwifi105$laterror),]
+head(valwifi105ordenado[368:378], 35)
+
+# el phoneid 13 y 20 siguen saliento mucho
+
+#listado de los errores de latidud ordenado de mayor a menor
+
+valwifi105ordenadodemasamenos <- valwifi105[order(-valwifi105$laterror),]
+head(valwifi105ordenadodemasamenos[368:378], 35)
+
+phone13 <- filter(wifitraining105, wifitraining105$PHONEID == 13)
+
+valwifi105ordenadodemasamenos <- valwifi105[order(-valwifi105$laterror),]
+head(phone13[450:478], 35)
+
+
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = laterror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Visulización de los errores de latitud por finger print',
+       x = 'Error de latitud') +
+  theme_minimal()
+
+# para segmentar mejor el error lo separo por edificio 0
+
+valwifi105$latpredictions <- knntestpredlated
+
+valwifi105edif0 <- filter(valwifi105, valwifi105$BUILDINGID == 0)
+
+summary(valwifi105edif0[370:377])
+
+valwifi105edif0$laterror <- valwifi105edif0$LATITUDE - valwifi105edif0$latpredictions
+
+summary(valwifi105edif0[370:378])
+
+esquisser(valwifi105edif0)
+
+ggplot(data = valwifi105edif0) +
+  aes(x = laterror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de latitud en el edificio 0',
+       x = 'Error de latitud') +
+  theme_minimal()
+
+# 
+
+# para segmentar mejor el error lo separo por edificio 1
+
+valwifi105$latpredictions <- knntestpredlated
+
+valwifi105edif1 <- filter(valwifi105, valwifi105$BUILDINGID == 1)
+
+summary(valwifi105edif1[370:377])
+
+valwifi105edif1$laterror <- valwifi105edif1$LATITUDE - valwifi105edif1$latpredictions
+
+summary(valwifi105edif1[370:378])
+
+esquisser(valwifi105edif1)
+
+ggplot(data = valwifi105edif1) +
+  aes(x = laterror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de latitud en el edificio 1',
+       x = 'Latitud error') +
+  theme_minimal()
+
+# para segmentar mejor el error lo separo por edificio 2
+
+valwifi105$latpredictions <- knntestpredlated
+
+valwifi105edif2 <- filter(valwifi105, valwifi105$BUILDINGID == 2)
+
+summary(valwifi105edif2[370:377])
+
+valwifi105edif2$laterror <- valwifi105edif2$LATITUDE - valwifi105edif2$latpredictions
+
+summary(valwifi105edif2[370:378])
+
+esquisser(valwifi105edif2)
+
+ggplot(data = valwifi105edif2) +
+  aes(x = laterror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de latitud en el edificio 2',
+       x = 'Error latitud') +
+  theme_minimal()
+
+# KNN  para predecir latitud sin edificio
+
+# training dataset
+summary(comuneswapstrain[312:321])
+trainpredlated <- comuneswapstrain[-c(313,315,316,317:321)]
+summary(trainpredlated[300:313])
+str(trainpredlated[300:313])
+
+
+#testing datset
+
+summary(comuneswapsval[312:321])
+testpredlated <- comuneswapsval[-c(313,315,316,317:321)]
+summary(testpredlated[300:313])
+
+
+set.seed(123)
+
+system.time(knn.latitud <- train.kknn(LATITUDE~., trainpredlated, kernel = "rectangular"))
+
+knntestpredlated <- predict(knn.latitud, newdata = testpredlated)
+
+knnpredlated <- knntestpredlated
+knnpredlated
+
+knnactuallated <- valwifi105$LATITUDE
+
+
+#plotpredandactualbuilding <- plot(predandactual$actual, predandactual$rfpredictions)
+
+#predandactualbuilding <- data.frame(rfpredbuilding, actual)
+
+#predandactualbuilding$errors<-predandactualbuilding$rfpredbuilding-predandactualbuilding$actual
+
+#esquisser(predandactualbuilding)
+
+
+postResample(knnpredlated, valwifi105$LATITUDE)
+
+# visualización de los errores con todos los edificios
+
+valwifi105$latpredictions <- knntestpredlated
+
+summary(valwifi105[370:377])
+
+valwifi105$laterror <- valwifi105$LATITUDE - valwifi105$latpredictions
+
+summary(valwifi105[368:378])
+
+head(valwifi105[368:378])
+
+
+
 # KNN  para predecir longitud con edificio
 
 # training dataset
@@ -1216,6 +1602,219 @@ knnactuallong <- valwifi105$LONGITUDE
 postResample(knnpredlong, valwifi105$LONGITUDE)
 
 
+# RANDOM FOREST  para predecir latitud sin edificio
+
+# training dataset
+summary(comuneswapstrain[312:323])
+trainpredlated <- comuneswapstrain[-c(313,315:323)]
+summary(trainpredlated[300:313])
+str(trainpredlated[300:313])
+
+
+#testing datset
+
+summary(comuneswapsval[312:322])
+testpredlated <- comuneswapsval[-c(313,315,316,317:322)]
+summary(testpredlated[300:313])
+
+
+set.seed(123)
+system.time(rf_latitud <- randomForest(LATITUDE ~ ., trainpredlated, ntree=100))
+rf_latitud_prediction <- predict(rf_latitud, newdata = testpredlated)
+postResample(rf_latitud_prediction, valwifi105$LATITUDE)
+
+
+valwifi105$rf_latitud_prediction <- rf_latitud_prediction
+summary(valwifi105[370:379])
+valwifi105$rflaterror <- valwifi105$LATITUDE - valwifi105$rf_latitud_prediction
+summary(valwifi105[370:380])
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = rflaterror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de latitude en todos los edificios (RF)') +
+  theme_minimal()
+
+# RANDOM FOREST  para predecir longitud sin edificio
+
+summary(comuneswapstrain[312:323])
+trainpredlong <- comuneswapstrain[-c(314,315:323)]
+summary(trainpredlong[300:313])
+
+
+#testing datset
+
+summary(comuneswapsval[312:322])
+testpredlong <- comuneswapsval[-c(314,315:322)]
+summary(testpredlong[300:313])
 
 
 
+set.seed(123)
+system.time(rf_longitude <- randomForest(LONGITUDE ~ ., trainpredlong, ntree=100))
+rf_longitude_prediction <- predict(rf_longitude, newdata = testpredlong)
+postResample(rf_longitude_prediction, valwifi105$LONGITUDE)
+
+
+valwifi105$rf_longitude_prediction <- rf_longitude_prediction
+summary(valwifi105[370:379])
+valwifi105$rflongerror <- valwifi105$LONGITUDE - valwifi105$rf_longitude_prediction
+summary(valwifi105[370:381])
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = rflongerror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de longitude en todos los edificios (RF)') +
+  theme_minimal()
+
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = rf_longitude_prediction, y = latpredictions, color = FLOOR) +
+  geom_point() +
+  labs(title = 'Latitude and longitude prediction by floor') +
+  theme_minimal()
+
+ggplot(data = valwifi105) +
+  aes(x = rf_longitude_prediction, y = rf_latitud_prediction) +
+  geom_point(color = '#e41a1c') +
+  labs(title = 'Predicted latitude and longitude by floor') +
+  theme_minimal() +
+  facet_wrap(valwifi105$FLOOR)
+
+
+
+ggplot(data = valwifi105) +
+  aes(x = LONGITUDE, y = LATITUDE) +
+  geom_point(color = '#35b779') +
+  labs(title = 'Real latitude and longitud by floor') +
+  theme_minimal() +
+facet_wrap(valwifi105$FLOOR)
+
+# RANDOM FOREST  para predecir longitud CON edificio
+
+summary(comuneswapstrain[312:323])
+trainpredlong <- comuneswapstrain[-c(314,315,317,318:323)]
+summary(trainpredlong[300:314])
+
+
+#testing datset
+
+summary(comuneswapsval[312:322])
+testpredlong <- comuneswapsval[-c(314,315,317:322)]
+summary(testpredlong[300:314])
+
+
+
+set.seed(123)
+system.time(rf_longitudeconedif <- randomForest(LONGITUDE ~ ., trainpredlong, ntree=100))
+rf_longitude_prediction_con_edif <- predict(rf_longitudeconedif, newdata = testpredlong)
+postResample(rf_longitude_prediction_con_edif, valwifi105$LONGITUDE)
+
+
+valwifi105$rf_longitude_prediction_con_edif <- rf_longitude_prediction_con_edif
+summary(valwifi105[370:379])
+valwifi105$rflongerrorconedif <- valwifi105$LONGITUDE - valwifi105$rf_longitude_prediction_con_edif
+summary(valwifi105[370:381])
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = rflongerrorconedif) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de longitude en todos los edificios (RF)') +
+  theme_minimal()
+
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = rf_longitude_prediction, y = latpredictions, color = FLOOR) +
+  geom_point() +
+  labs(title = 'Latitude and longitude prediction by floor') +
+  theme_minimal()
+
+ggplot(data = valwifi105) +
+  aes(x = rf_longitude_prediction, y = rf_latitud_prediction) +
+  geom_point(color = '#e41a1c') +
+  labs(title = 'Predicted latitude and longitude by floor') +
+  theme_minimal() +
+  facet_wrap(valwifi105$FLOOR)
+
+
+
+ggplot(data = valwifi105) +
+  aes(x = LONGITUDE, y = LATITUDE) +
+  geom_point(color = '#35b779') +
+  labs(title = 'Real latitude and longitud by floor') +
+  theme_minimal() +
+  facet_wrap(valwifi105$FLOOR)
+
+
+# RANDOM FOREST  para predecir latitud con edificio
+
+# training dataset
+summary(comuneswapstrain[312:323])
+trainpredlated <- comuneswapstrain[-c(313,315,317:323)]
+summary(trainpredlated[300:314])
+str(trainpredlated[300:314])
+
+
+#testing datset
+
+summary(comuneswapsval[312:322])
+testpredlated <- comuneswapsval[-c(313,315,317:322)]
+summary(testpredlated[300:314])
+
+
+set.seed(123)
+system.time(rf_latitudconedif <- randomForest(LATITUDE ~ ., trainpredlated, ntree=100))
+rf_latitud_predictionconedif <- predict(rf_latitudconedif, newdata = testpredlated)
+postResample(rf_latitud_predictionconedif, valwifi105$LATITUDE)
+
+
+valwifi105$rf_latitud_predictionconedif <- rf_latitud_predictionconedif
+summary(valwifi105[370:379])
+valwifi105$rflaterror <- valwifi105$LATITUDE - valwifi105$rf_latitud_predictionconedif
+summary(valwifi105[370:380])
+esquisser(valwifi105)
+
+ggplot(data = valwifi105) +
+  aes(x = rflaterror) +
+  geom_histogram(bins = 30, fill = '#0c4c8a') +
+  labs(title = 'Error de latitude en todos los edificios con edificio (RF)') +
+  theme_minimal()
+  
+
+# RANDOM FOREST  para predecir longitud sin edificio y solo con los moviles 13 y 14
+
+#summary(phone13y14train[312:321])
+#trainpredlong13y14 <- phone13y14train[-c(314,315:321)]
+#summary(trainpredlong13y14[300:313])
+
+
+#testing datset
+
+#summary(phone13y14test[312:321])
+#testpredlong13y14 <- phone13y14test[-c(314,315:321)]
+#summary(testpredlong13y14[300:313])
+
+
+
+#set.seed(123)
+#system.time(rf_longitude13y14 <- randomForest(LONGITUDE ~ ., trainpredlong13y14, ntree=150))
+#rf_longitude_prediction13y14 <- predict(rf_longitude13y14, newdata = testpredlong13y14)
+#postResample(rf_longitude_prediction13y14, phone13y14test$LONGITUDE)
+
+
+#phone13y14test$rf_longitude_prediction13y14 <- rf_longitude_prediction13y14
+#summary(valwifi105[370:379])
+#phone13y14test$rflongerror13y14 <- phone13y14test$LONGITUDE - phone13y14test$rf_longitude_prediction13y14
+#summary(valwifi105[370:381])
+#esquisser(phone13y14test)
+
+#ggplot(data = phone13y14test) +
+#  aes(x = rflongerror13y14) +
+#  geom_histogram(bins = 30, fill = '#0c4c8a') +
+#  labs(title = 'Error de longitude en todos los edificios pero solo de los moviles 13 y 14 (RF)') +
+#  theme_minimal()
