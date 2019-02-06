@@ -1818,3 +1818,7 @@ ggplot(data = valwifi105) +
 #  geom_histogram(bins = 30, fill = '#0c4c8a') +
 #  labs(title = 'Error de longitude en todos los edificios pero solo de los moviles 13 y 14 (RF)') +
 #  theme_minimal()
+
+buscar infor de Vector field
+
+
